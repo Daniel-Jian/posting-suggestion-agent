@@ -13,7 +13,7 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "posting-suggestion-agent"
-database_id = "REPLACE_ME"
+database_id = "4bb3ac32-8ef4-4361-a577-e31f196bb43f"
 
 [[vectorize]]
 binding = "POSTING_INDEX"
