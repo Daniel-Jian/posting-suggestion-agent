@@ -1,0 +1,29 @@
+name = "posting-suggestion-agent"
+main = "src/index.ts"
+compatibility_date = "2026-06-27"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "posting-suggestion-agent"
+database_id = "REPLACE_ME"
+
+[[vectorize]]
+binding = "POSTING_INDEX"
+index_name = "posting-suggestion-agent-postings"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+APP_NAME = "Posting Suggestion Agent"
+LLM_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b"

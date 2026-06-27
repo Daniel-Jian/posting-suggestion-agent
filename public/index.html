@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Posting Suggestion Agent</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --ink: #1d2433;
+        --muted: #637083;
+        --line: #d8dee8;
+        --primary: #0f766e;
+        --primary-dark: #115e59;
+        --accent: #b45309;
+        --code: #111827;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 72px;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: 24px;
+        font-weight: 720;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      main {
+        padding: 28px 0;
+      }
+
+      .status {
+        color: var(--accent);
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        min-width: 0;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-body {
+        padding: 18px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      textarea,
+      pre {
+        width: 100%;
+        min-height: 420px;
+        margin: 0;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fbfcfe;
+        color: var(--code);
+        font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      textarea {
+        resize: vertical;
+        padding: 14px;
+      }
+
+      pre {
+        overflow: auto;
+        padding: 14px;
+        white-space: pre-wrap;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      button {
+        min-height: 40px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: 0 14px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--primary);
+        color: #ffffff;
+      }
+
+      button.primary:hover {
+        background: var(--primary-dark);
+      }
+
+      button.secondary {
+        border-color: var(--line);
+        background: #ffffff;
+        color: var(--ink);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .notice {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 860px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        textarea,
+        pre {
+          min-height: 300px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="shell topbar">
+        <h1>Posting Suggestion Agent</h1>
+        <div class="status">Backend stubs</div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <div class="workspace">
+        <section aria-labelledby="cases-heading">
+          <div class="panel-head">
+            <h2 id="cases-heading">Unresolved cases</h2>
+          </div>
+          <div class="panel-body">
+            <label for="cases-input">JSON input</label>
+            <textarea id="cases-input" spellcheck="false"></textarea>
+            <div class="actions">
+              <button class="primary" id="run-button" type="button">Create suggestions</button>
+              <button class="secondary" id="sample-button" type="button">Load sample</button>
+            </div>
+            <div class="notice" id="input-status" role="status"></div>
+          </div>
+        </section>
+
+        <section aria-labelledby="response-heading">
+          <div class="panel-head">
+            <h2 id="response-heading">Response</h2>
+          </div>
+          <div class="panel-body">
+            <pre id="response-output">{}</pre>
+            <div class="actions">
+              <button class="secondary" id="accept-button" type="button">Store accepted posting</button>
+            </div>
+            <div class="notice" id="response-status" role="status"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const casesInput = document.querySelector("#cases-input");
+      const responseOutput = document.querySelector("#response-output");
+      const inputStatus = document.querySelector("#input-status");
+      const responseStatus = document.querySelector("#response-status");
+      const runButton = document.querySelector("#run-button");
+      const sampleButton = document.querySelector("#sample-button");
+      const acceptButton = document.querySelector("#accept-button");
+
+      const sampleCases = {
+        cases: [
+          {
+            id: "case-1001",
+            receiptText: "Office supplies, stationery and printer paper",
+            transactionText: "CARD PAYMENT OFFICE DEPOT",
+            amount: 84.72,
+            currency: "EUR",
+            bookingDate: "2026-06-15"
+          }
+        ]
+      };
+
+      function setResponse(value) {
+        responseOutput.textContent = JSON.stringify(value, null, 2);
+      }
+
+      function parseInput() {
+        try {
+          inputStatus.textContent = "";
+          return JSON.parse(casesInput.value);
+        } catch {
+          inputStatus.textContent = "Invalid JSON.";
+          return undefined;
+        }
+      }
+
+      async function postJson(path, payload) {
+        const response = await fetch(path, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        return response.json();
+      }
+
+      sampleButton.addEventListener("click", () => {
+        casesInput.value = JSON.stringify(sampleCases, null, 2);
+        inputStatus.textContent = "";
+      });
+
+      runButton.addEventListener("click", async () => {
+        const payload = parseInput();
+        if (!payload) {
+          return;
+        }
+
+        runButton.disabled = true;
+        responseStatus.textContent = "Requesting stub response.";
+
+        try {
+          const result = await postJson("/api/suggestion-runs", payload);
+          setResponse(result);
+          responseStatus.textContent = "Stub response received.";
+        } catch {
+          responseStatus.textContent = "Request failed.";
+        } finally {
+          runButton.disabled = false;
+        }
+      });
+
+      acceptButton.addEventListener("click", async () => {
+        acceptButton.disabled = true;
+        responseStatus.textContent = "Requesting storage stub response.";
+
+        try {
+          const result = await postJson("/api/accepted-postings", {
+            posting: {
+              source: "frontend-placeholder"
+            }
+          });
+          setResponse(result);
+          responseStatus.textContent = "Stub response received.";
+        } catch {
+          responseStatus.textContent = "Request failed.";
+        } finally {
+          acceptButton.disabled = false;
+        }
+      });
+
+      casesInput.value = JSON.stringify(sampleCases, null, 2);
+    </script>
+  </body>
+</html>

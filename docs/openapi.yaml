@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: Posting Suggestion Agent API
+  version: 0.1.0
+  description: Prototype API documentation. The first scaffold exposes stubbed backend routes only.
+servers:
+  - url: /
+paths:
+  /api/suggestion-runs:
+    post:
+      summary: Create posting suggestions from unresolved cases
+      description: Stub endpoint for the first project scaffold. It validates the request shape and returns NOT_IMPLEMENTED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cases
+              properties:
+                cases:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/UnresolvedCase"
+      responses:
+        "501":
+          description: Suggestion generation is not implemented yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/accepted-postings:
+    post:
+      summary: Store a human-approved posting as a learning example
+      description: Stub endpoint for the first project scaffold. It validates the request shape and returns NOT_IMPLEMENTED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - posting
+              properties:
+                posting:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "501":
+          description: Accepted posting storage is not implemented yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    UnresolvedCase:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        receiptText:
+          type: string
+        transactionText:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        bookingDate:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
