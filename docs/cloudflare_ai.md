@@ -95,10 +95,26 @@ model output can still be malformed. If Workers AI returns malformed or
 incompatible JSON, the API returns a consistent JSON error instead of returning
 raw model text.
 
+The Worker tries the safe response locations Workers AI may provide before
+failing a suggestion:
+
+```text
+response object
+response string
+choices[0].message.content
+raw string response
+```
+
+If one location contains incomplete JSON but another contains valid JSON, the
+valid location is used. If every location is missing, malformed, incomplete, or
+does not match the expected suggestion fields, the whole suggestion run fails
+with the normal API error shape.
+
 `max_tokens` is set in Worker code, not in the Cloudflare Worker settings page.
 To inspect token usage, open Cloudflare Worker Live Logs and look for the
 `ai_success` event. The Worker logs safe metadata such as `schemaVersion`,
-`maxTokens`, model name, duration, and `usage` when Workers AI returns it.
+`maxTokens`, model name, duration, completion finish reasons, parse candidate
+summaries, and `usage` when Workers AI returns it.
 
 JSON mode reference:
 

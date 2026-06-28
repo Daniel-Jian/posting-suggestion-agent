@@ -18,7 +18,29 @@ type RawAiResponse = {
 
 type AiResponseJsonDetails = {
   value: unknown;
-  source: "raw_string" | "response_string" | "response_object" | "choices_message";
+  source: AiResponseCandidateSource;
+};
+
+type AiResponseCandidateSource =
+  | "raw_string"
+  | "response_string"
+  | "response_object"
+  | "choices_message";
+
+type AiResponseCandidate = {
+  source: AiResponseCandidateSource;
+  value: unknown;
+};
+
+type AiResponseCandidateParseSummary = {
+  source: AiResponseCandidateSource;
+  valueType: string;
+  ok: boolean;
+  errorMessage?: string;
+  textLength?: number;
+  containsOpeningBrace?: boolean;
+  containsClosingBrace?: boolean;
+  textExcerpt?: string;
 };
 
 type AiResponseParseFailureDetails = {
@@ -28,6 +50,8 @@ type AiResponseParseFailureDetails = {
   responseFieldIsArray: boolean;
   responseFieldKeys?: string[];
   text?: string;
+  candidates: AiResponseCandidateParseSummary[];
+  completion: Record<string, unknown>;
 };
 
 type RawPostingSuggestion = {
@@ -87,14 +111,25 @@ export async function createPostingSuggestions(
       similarExamples,
       options
     );
-    const suggestion = normalizeSuggestion(rawSuggestion, env.LLM_MODEL, similarExamples);
-    suggestions.push(
-      summarizeConfidence({
-        suggestion,
-        unresolvedCase,
-        similarExamples
-      })
-    );
+
+    try {
+      const suggestion = normalizeSuggestion(rawSuggestion, env.LLM_MODEL, similarExamples);
+      suggestions.push(
+        summarizeConfidence({
+          suggestion,
+          unresolvedCase,
+          similarExamples
+        })
+      );
+    } catch (err) {
+      options.log?.("ai_normalize_failed", {
+        caseId: unresolvedCase.id,
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        errorMessage: err instanceof Error ? err.message : "Unknown error."
+      });
+
+      throw err;
+    }
   }
 
   return {
@@ -168,7 +203,8 @@ async function generatePostingSuggestion(
   options.log?.("ai_success", {
     caseId,
     durationMs: Date.now() - startedAt,
-    usage: typeof response === "object" && response !== null ? response.usage : undefined
+    usage: typeof response === "object" && response !== null ? response.usage : undefined,
+    ...summarizeAiCompletionMetadata(response)
   });
 
   options.log?.("ai_parse_start", { caseId });
@@ -249,7 +285,11 @@ function parseJsonObject(value: string): unknown {
     const start = value.indexOf("{");
     const end = value.lastIndexOf("}");
 
-    if (start === -1 || end === -1 || end <= start) {
+    if (start !== -1 && end === -1) {
+      throw new AiSuggestionError("Workers AI returned incomplete JSON.");
+    }
+
+    if (start === -1 || end <= start) {
       throw new AiSuggestionError("Workers AI did not return JSON.");
     }
 
@@ -262,40 +302,42 @@ function parseJsonObject(value: string): unknown {
 }
 
 function parseAiJsonResponse(response: RawAiResponse | string): AiResponseJsonDetails {
-  if (typeof response === "string") {
-    return {
-      value: parseJsonObject(response),
-      source: "raw_string"
-    };
+  const candidates = getAiResponseCandidates(response);
+  const errors: AiSuggestionError[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      return {
+        value: parseAiResponseCandidate(candidate),
+        source: candidate.source
+      };
+    } catch (err) {
+      if (err instanceof AiSuggestionError) {
+        errors.push(err);
+      } else {
+        throw err;
+      }
+    }
   }
 
-  if (!isObject(response)) {
-    throw new AiSuggestionError("Workers AI did not return JSON.");
+  if (errors.some((err) => err.message === "Workers AI returned incomplete JSON.")) {
+    throw new AiSuggestionError("Workers AI returned incomplete JSON.");
   }
 
-  const responseField = response.response;
-
-  if (typeof responseField === "string") {
-    return {
-      value: parseJsonObject(responseField),
-      source: "response_string"
-    };
+  if (errors.some((err) => err.message === "Workers AI returned malformed JSON.")) {
+    throw new AiSuggestionError("Workers AI returned malformed JSON.");
   }
 
-  if (isObject(responseField)) {
-    return {
-      value: responseField,
-      source: "response_object"
-    };
+  throw new AiSuggestionError("Workers AI did not return JSON.");
+}
+
+function parseAiResponseCandidate(candidate: AiResponseCandidate): unknown {
+  if (candidate.source === "response_object" && isObject(candidate.value)) {
+    return candidate.value;
   }
 
-  const choiceMessageContent = getChoiceMessageContent(response);
-
-  if (typeof choiceMessageContent === "string") {
-    return {
-      value: parseJsonObject(choiceMessageContent),
-      source: "choices_message"
-    };
+  if (typeof candidate.value === "string") {
+    return parseJsonObject(candidate.value);
   }
 
   throw new AiSuggestionError("Workers AI did not return JSON.");
@@ -307,7 +349,9 @@ function summarizeAiParseFailure(response: RawAiResponse | string): Record<strin
     responseKind: details.responseKind,
     responseKeys: details.responseKeys,
     responseFieldType: details.responseFieldType,
-    responseFieldIsArray: details.responseFieldIsArray
+    responseFieldIsArray: details.responseFieldIsArray,
+    candidates: details.candidates,
+    ...details.completion
   };
 
   if (details.responseFieldKeys) {
@@ -333,7 +377,9 @@ function getAiResponseParseFailureDetails(
       responseKeys: [],
       responseFieldType: "missing",
       responseFieldIsArray: false,
-      text: response
+      text: response,
+      candidates: summarizeAiResponseCandidates(getAiResponseCandidates(response)),
+      completion: summarizeAiCompletionMetadata(response)
     };
   }
 
@@ -342,7 +388,9 @@ function getAiResponseParseFailureDetails(
       responseKind: response === null ? "null" : typeof response,
       responseKeys: [],
       responseFieldType: "missing",
-      responseFieldIsArray: false
+      responseFieldIsArray: false,
+      candidates: [],
+      completion: summarizeAiCompletionMetadata(response)
     };
   }
 
@@ -352,7 +400,9 @@ function getAiResponseParseFailureDetails(
     responseKind: "object",
     responseKeys: Object.keys(response),
     responseFieldType: getValueType(responseField),
-    responseFieldIsArray
+    responseFieldIsArray,
+    candidates: summarizeAiResponseCandidates(getAiResponseCandidates(response)),
+    completion: summarizeAiCompletionMetadata(response)
   };
 
   if (isObject(responseField)) {
@@ -372,6 +422,76 @@ function getAiResponseParseFailureDetails(
   return details;
 }
 
+function getAiResponseCandidates(response: RawAiResponse | string): AiResponseCandidate[] {
+  if (typeof response === "string") {
+    return [
+      {
+        source: "raw_string",
+        value: response
+      }
+    ];
+  }
+
+  if (!isObject(response)) {
+    return [];
+  }
+
+  const candidates: AiResponseCandidate[] = [];
+
+  if (isObject(response.response)) {
+    candidates.push({
+      source: "response_object",
+      value: response.response
+    });
+  }
+
+  if (typeof response.response === "string") {
+    candidates.push({
+      source: "response_string",
+      value: response.response
+    });
+  }
+
+  const choiceMessageContent = getChoiceMessageContent(response);
+
+  if (typeof choiceMessageContent === "string") {
+    candidates.push({
+      source: "choices_message",
+      value: choiceMessageContent
+    });
+  }
+
+  return candidates;
+}
+
+function summarizeAiResponseCandidates(
+  candidates: AiResponseCandidate[]
+): AiResponseCandidateParseSummary[] {
+  return candidates.map((candidate) => {
+    const summary: AiResponseCandidateParseSummary = {
+      source: candidate.source,
+      valueType: getValueType(candidate.value),
+      ok: false
+    };
+
+    if (typeof candidate.value === "string") {
+      summary.textLength = candidate.value.length;
+      summary.containsOpeningBrace = candidate.value.includes("{");
+      summary.containsClosingBrace = candidate.value.includes("}");
+      summary.textExcerpt = candidate.value.slice(0, 500);
+    }
+
+    try {
+      parseAiResponseCandidate(candidate);
+      summary.ok = true;
+    } catch (err) {
+      summary.errorMessage = err instanceof Error ? err.message : "Unknown parse error.";
+    }
+
+    return summary;
+  });
+}
+
 function getChoiceMessageContent(response: Record<string, unknown>): string | undefined {
   if (!Array.isArray(response.choices) || response.choices.length === 0) {
     return undefined;
@@ -386,6 +506,22 @@ function getChoiceMessageContent(response: Record<string, unknown>): string | un
   return typeof firstChoice.message.content === "string"
     ? firstChoice.message.content
     : undefined;
+}
+
+function summarizeAiCompletionMetadata(response: unknown): Record<string, unknown> {
+  if (!isObject(response) || !Array.isArray(response.choices)) {
+    return {};
+  }
+
+  const finishReasons = response.choices
+    .filter(isObject)
+    .map((choice) => choice.finish_reason)
+    .filter((value): value is string => typeof value === "string");
+
+  return {
+    choiceCount: response.choices.length,
+    choiceFinishReasons: finishReasons.length > 0 ? finishReasons : undefined
+  };
 }
 
 function getValueType(value: unknown): string {
