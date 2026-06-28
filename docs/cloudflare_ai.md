@@ -87,7 +87,7 @@ The current generation settings use:
 ```text
 response_format.type = "json_object"
 schemaVersion = "flat_v1"
-max_tokens = 700
+max_tokens = 1500
 ```
 
 Cloudflare supports JSON output mode for compatible text generation models, but
@@ -115,6 +115,9 @@ To inspect token usage, open Cloudflare Worker Live Logs and look for the
 `ai_success` event. The Worker logs safe metadata such as `schemaVersion`,
 `maxTokens`, model name, duration, completion finish reasons, parse candidate
 summaries, and `usage` when Workers AI returns it.
+
+If `choiceFinishReasons` contains `length` and `completion_tokens` equals
+`maxTokens`, the model stopped because the completion budget was too low.
 
 JSON mode reference:
 

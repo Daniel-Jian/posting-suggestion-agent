@@ -74,7 +74,7 @@ type RawPostingSuggestion = {
 
 const suggestionSchemaVersion = "flat_v1";
 const suggestionResponseFormat = "json_object";
-const suggestionMaxTokens = 700;
+const suggestionMaxTokens = 1500;
 
 export class AiSuggestionError extends Error {
   constructor(message: string) {
