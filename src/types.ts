@@ -57,7 +57,14 @@ export type SuggestionRunRequest = {
 };
 
 export type AcceptedPostingRequest = {
-  posting: JsonObject;
+  success: true;
+  data: SuggestionRunResponse;
+};
+
+export type AcceptedPostingResponse = {
+  stored_count: number;
+  accepted_posting_ids: string[];
+  vector_ids: string[];
 };
 
 export type SuggestedPosting = {

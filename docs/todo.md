@@ -11,19 +11,17 @@ stubbed.
 - Wrangler bindings for Assets, Workers AI, D1, and Vectorize.
 - Initial D1 migration for `suggestion_runs` and `accepted_postings`.
 - Implemented first-run `POST /api/suggestion-runs` route.
-- Stub `POST /api/accepted-postings` route.
+- Implemented `POST /api/accepted-postings` route for accepted posting storage.
 - Sample unresolved cases exposed through `GET /api/sample-data`.
 - OpenAPI documentation for the two core POST routes.
 - Cloudflare AI dashboard setup notes in `docs/cloudflare_ai.md`.
 
 ## Backend API
 
-- Replace the `501 NOT_IMPLEMENTED` response in `POST /api/accepted-postings`
-  with real accepted posting storage.
 - Add deeper validation for unresolved case fields beyond the top-level
   `cases` and `accounts` arrays.
-- Add explicit validation for accepted posting payloads.
-- Define response types for successful accepted posting storage.
+- Add deeper validation for accepted posting payloads beyond the accepted
+  suggestion fields needed for storage.
 - Decide whether `GET /api/sample-data` should remain a development helper or
   be removed to match the architecture route list.
 
@@ -36,25 +34,16 @@ stubbed.
 
 ## Embeddings and vector memory
 
-- Implement `createEmbedding` in `src/services/embeddings.ts`.
-- Call the configured Workers AI embedding model from `env.EMBEDDING_MODEL`.
-- Implement `findSimilarAcceptedPostings` in
-  `src/services/vectorMemory.ts`.
 - Query Vectorize for similar accepted postings when creating suggestions after
   accepted posting storage is implemented.
-- Store accepted posting embeddings in Vectorize after human approval.
-- Define stable Vectorize IDs and metadata for accepted postings.
+- Implement `findSimilarAcceptedPostings` in
+  `src/services/vectorMemory.ts`.
 - Handle missing or empty vector search results gracefully.
 
 ## D1 storage
 
-- Implement `storeAcceptedPosting` in `src/services/storage.ts`.
-- Insert accepted posting JSON into `accepted_postings`.
 - Generate stable IDs for suggestion runs and accepted postings.
 - Explicitly map database fields instead of returning raw D1 rows.
-- Add small helper functions for reading/writing D1 data.
-- Consider whether `accepted_postings` needs additional query fields beyond
-  JSON, such as account, amount, currency, merchant, or booking date.
 
 ## Confidence and review logic
 
@@ -67,11 +56,8 @@ stubbed.
 
 - Load sample data from `GET /api/sample-data` or remove the duplicate inline
   sample object.
-- Display real suggestion results in an editable review area.
 - Allow the user to approve or edit a selected suggestion.
-- Send the edited approved posting to `POST /api/accepted-postings`.
 - Show clear success and error states for real API responses.
-- Replace accepted-posting stub status messages once the storage flow is live.
 
 ## Documentation
 

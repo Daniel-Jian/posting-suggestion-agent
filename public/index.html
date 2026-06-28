@@ -110,8 +110,7 @@
         font-weight: 650;
       }
 
-      textarea,
-      pre {
+      textarea {
         width: 100%;
         min-height: 420px;
         margin: 0;
@@ -125,12 +124,6 @@
       textarea {
         resize: vertical;
         padding: 14px;
-      }
-
-      pre {
-        overflow: auto;
-        padding: 14px;
-        white-space: pre-wrap;
       }
 
       .actions {
@@ -182,7 +175,7 @@
         }
 
         textarea,
-        pre {
+        textarea {
           min-height: 300px;
         }
       }
@@ -218,9 +211,9 @@
             <h2 id="response-heading">Response</h2>
           </div>
           <div class="panel-body">
-            <pre id="response-output">{}</pre>
+            <textarea id="response-output" spellcheck="false">{}</textarea>
             <div class="actions">
-              <button class="secondary" id="accept-button" type="button">Store accepted posting</button>
+              <button class="secondary" id="accept-button" type="button">Store accepted postings</button>
             </div>
             <div class="notice" id="response-status" role="status"></div>
           </div>
@@ -293,7 +286,7 @@
       };
 
       function setResponse(value) {
-        responseOutput.textContent = JSON.stringify(value, null, 2);
+        responseOutput.value = JSON.stringify(value, null, 2);
       }
 
       function describeRequestError(error) {
@@ -310,6 +303,16 @@
           return JSON.parse(casesInput.value);
         } catch {
           inputStatus.textContent = "Invalid JSON.";
+          return undefined;
+        }
+      }
+
+      function parseResponse() {
+        try {
+          responseStatus.textContent = "";
+          return JSON.parse(responseOutput.value);
+        } catch {
+          responseStatus.textContent = "Response JSON is invalid.";
           return undefined;
         }
       }
@@ -391,15 +394,16 @@
       });
 
       acceptButton.addEventListener("click", async () => {
+        const payload = parseResponse();
+        if (!payload) {
+          return;
+        }
+
         acceptButton.disabled = true;
-        responseStatus.textContent = "Requesting accepted-posting storage.";
+        responseStatus.textContent = "Storing accepted postings.";
 
         try {
-          const result = await postJson("/api/accepted-postings", {
-            posting: {
-              source: "frontend-placeholder"
-            }
-          });
+          const result = await postJson("/api/accepted-postings", payload);
           setResponse(result.body);
           responseStatus.textContent = result.ok
             ? `Accepted-posting response received. Request ID: ${result.requestId ?? "not provided"}.`

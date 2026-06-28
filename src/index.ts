@@ -6,9 +6,13 @@ import {
   AiSuggestionError,
   AiSuggestionTimeoutError
 } from "./services/aiClient";
+import {
+  AcceptedPostingStorageError,
+  AcceptedPostingValidationError,
+  storeAcceptedPostingsFromRunResponse
+} from "./services/acceptedPostings";
 import { sampleAccounts, sampleUnresolvedCases } from "./sampleData";
 import type {
-  AcceptedPostingRequest,
   ApiErrorResponse,
   ApiSuccessResponse,
   SuggestionRunRequest
@@ -80,16 +84,6 @@ function isSuggestionRunRequest(value: unknown): value is SuggestionRunRequest {
     Array.isArray((value as { cases: unknown }).cases) &&
     "accounts" in value &&
     Array.isArray((value as { accounts: unknown }).accounts)
-  );
-}
-
-function isAcceptedPostingRequest(value: unknown): value is AcceptedPostingRequest {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "posting" in value &&
-    typeof (value as { posting: unknown }).posting === "object" &&
-    (value as { posting: unknown }).posting !== null
   );
 }
 
@@ -172,19 +166,60 @@ app.post("/api/suggestion-runs", async (c) => {
 });
 
 app.post("/api/accepted-postings", async (c) => {
+  const requestId = createRequestId();
+  const startedAt = Date.now();
+  logEvent(requestId, "request_received", {
+    path: "/api/accepted-postings"
+  });
+
   const body = await readJsonBody(c);
 
-  if (!isAcceptedPostingRequest(body)) {
-    return c.json(error("INVALID_REQUEST", "Request body must include a posting object."), 400);
-  }
+  try {
+    const result = await storeAcceptedPostingsFromRunResponse(c.env, body, {
+      log: (event, metadata) => {
+        logEvent(requestId, event, metadata);
+      }
+    });
 
-  return c.json(
-    error(
-      "NOT_IMPLEMENTED",
-      "Accepted posting storage is stubbed for the first project scaffold."
-    ),
-    501
-  );
+    logEvent(requestId, "accepted_postings_stored", {
+      durationMs: Date.now() - startedAt,
+      storedCount: result.stored_count,
+      vectorCount: result.vector_ids.length
+    });
+
+    return jsonWithRequestId(c, success(result), 200, requestId);
+  } catch (err) {
+    const errorName = err instanceof Error ? err.name : "UnknownError";
+    const errorMessage = err instanceof Error ? err.message : "Unknown error.";
+
+    if (err instanceof AcceptedPostingValidationError) {
+      logEvent(requestId, "request_error", {
+        errorName,
+        errorMessage,
+        durationMs: Date.now() - startedAt
+      });
+
+      return jsonWithRequestId(c, error("INVALID_REQUEST", err.message), 400, requestId);
+    }
+
+    if (err instanceof AcceptedPostingStorageError) {
+      logEvent(requestId, "request_error", {
+        errorName,
+        errorMessage,
+        durationMs: Date.now() - startedAt
+      });
+
+      return jsonWithRequestId(c, error("ACCEPTED_POSTING_FAILED", err.message), 502, requestId);
+    }
+
+    logEvent(requestId, "request_error", {
+      errorName,
+      errorMessage,
+      durationMs: Date.now() - startedAt
+    });
+
+    throw err;
+  }
 });
 
 app.get("/api/sample-data", (c) => {

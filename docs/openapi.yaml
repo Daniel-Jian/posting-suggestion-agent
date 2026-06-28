@@ -38,28 +38,28 @@ paths:
   /api/accepted-postings:
     post:
       summary: Store a human-approved posting as a learning example
-      description: Stub endpoint. Accepted posting storage is not implemented yet.
+      description: Stores edited suggestion-run output in D1, generates embeddings, and upserts accepted postings into Vectorize.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - posting
-              properties:
-                posting:
-                  type: object
-                  additionalProperties: true
+              $ref: "#/components/schemas/SuggestionRunSuccessResponse"
       responses:
-        "501":
-          description: Accepted posting storage is not implemented yet.
+        "200":
+          description: Accepted postings stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedPostingSuccessResponse"
+        "400":
+          description: Invalid request body.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Invalid request body.
+        "502":
+          description: Accepted posting storage, embedding generation, or Vectorize upsert failed.
           content:
             application/json:
               schema:
@@ -229,6 +229,32 @@ components:
                 $ref: "#/components/schemas/PostingSuggestion"
             summary:
               $ref: "#/components/schemas/SuggestionRunSummary"
+    AcceptedPostingSuccessResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - stored_count
+            - accepted_posting_ids
+            - vector_ids
+          properties:
+            stored_count:
+              type: integer
+            accepted_posting_ids:
+              type: array
+              items:
+                type: string
+            vector_ids:
+              type: array
+              items:
+                type: string
     PostingSuggestion:
       type: object
       required:
