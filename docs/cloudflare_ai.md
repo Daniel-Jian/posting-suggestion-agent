@@ -116,3 +116,66 @@ Vectorize reference:
 ```text
 https://developers.cloudflare.com/vectorize/get-started/intro/
 ```
+
+## 6. Debug suggestion runs
+
+The `POST /api/suggestion-runs` route writes safe structured logs with a
+`requestId`.
+
+The frontend also displays the `X-Request-Id` response header when the request
+finishes. Use that ID to find the same request in Cloudflare logs.
+
+Log events to expect:
+
+```text
+request_received
+request_validated
+ai_start
+ai_success
+ai_parse_start
+response_success
+```
+
+If the request times out, expect:
+
+```text
+request_timeout
+```
+
+If validation or model parsing fails, expect:
+
+```text
+request_error
+```
+
+The logs intentionally include only safe metadata such as request ID, case
+count, account count, model name, duration, and error message. They do not log
+full receipt text, prompts, account lists, or raw model output.
+
+To inspect logs in Cloudflare:
+
+1. Open the Cloudflare dashboard.
+2. Open **Workers & Pages**.
+3. Select the `posting-suggestion-agent` Worker.
+4. Open **Logs**.
+5. Start **Live logs**.
+6. Click **Create suggestions** in the app.
+7. Search or filter for the request ID shown by the frontend.
+
+You can also use Wrangler:
+
+```sh
+npx wrangler tail posting-suggestion-agent
+```
+
+If logs stop at `ai_start`, the Worker reached Workers AI and is waiting for
+the model response. If the frontend shows `REQUEST_TIMEOUT`, the browser waited
+longer than the configured frontend timeout. If the Worker returns
+`AI_SUGGESTION_TIMEOUT`, the backend 45-second Workers AI timeout fired.
+
+Cloudflare logging references:
+
+```text
+https://developers.cloudflare.com/workers/observability/logs/
+https://developers.cloudflare.com/workers/observability/logs/real-time-logs/
+```

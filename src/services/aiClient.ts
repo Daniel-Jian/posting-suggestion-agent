@@ -67,14 +67,28 @@ export class AiSuggestionError extends Error {
   }
 }
 
+export class AiSuggestionTimeoutError extends AiSuggestionError {
+  constructor(message = "Workers AI timed out after 45 seconds.") {
+    super(message);
+    this.name = "AiSuggestionTimeoutError";
+  }
+}
+
+export type SuggestionRunLogger = (event: string, metadata?: Record<string, unknown>) => void;
+
 export async function createPostingSuggestions(
   env: Env,
-  input: SuggestionRunRequest
+  input: SuggestionRunRequest,
+  options: {
+    log?: SuggestionRunLogger;
+    timeoutMs?: number;
+  } = {}
 ): Promise<SuggestionRunResponse> {
   const suggestions: PostingSuggestion[] = [];
 
   for (const unresolvedCase of input.cases) {
-    const rawSuggestion = await generatePostingSuggestion(env, input, unresolvedCase.id);
+    const rawSuggestion = await generatePostingSuggestion(env, input, unresolvedCase.id, options);
+    options.log?.("ai_parse_start", { caseId: unresolvedCase.id });
     suggestions.push(normalizeSuggestion(rawSuggestion, env.LLM_MODEL));
   }
 
@@ -99,7 +113,11 @@ export async function createPostingSuggestions(
 async function generatePostingSuggestion(
   env: Env,
   input: SuggestionRunRequest,
-  caseId: string
+  caseId: string,
+  options: {
+    log?: SuggestionRunLogger;
+    timeoutMs?: number;
+  }
 ): Promise<unknown> {
   const unresolvedCase = input.cases.find((candidate) => candidate.id === caseId);
 
@@ -107,30 +125,64 @@ async function generatePostingSuggestion(
     throw new AiSuggestionError("Unresolved case was not found.");
   }
 
-  const response = (await env.AI.run(env.LLM_MODEL, {
-    messages: [
-      {
-        role: "system",
-        content: buildSystemPrompt()
+  options.log?.("ai_start", {
+    caseId,
+    model: env.LLM_MODEL
+  });
+
+  const startedAt = Date.now();
+  const response = (await withTimeout(
+    env.AI.run(env.LLM_MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: buildSystemPrompt()
+        },
+        {
+          role: "user",
+          content: buildSuggestionPrompt({
+            unresolvedCase,
+            accounts: input.accounts
+          })
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: suggestionResponseSchema
       },
-      {
-        role: "user",
-        content: buildSuggestionPrompt({
-          unresolvedCase,
-          accounts: input.accounts
-        })
-      }
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: suggestionResponseSchema
-    },
-    temperature: 0.1,
-    max_tokens: 1200
-  })) as RawAiResponse | string;
+      temperature: 0.1,
+      max_tokens: 1200
+    }),
+    options.timeoutMs ?? 45000
+  )) as RawAiResponse | string;
+
+  options.log?.("ai_success", {
+    caseId,
+    durationMs: Date.now() - startedAt
+  });
 
   const responseText = typeof response === "string" ? response : String(response.response ?? "");
   return parseJsonObject(responseText);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new AiSuggestionTimeoutError(`Workers AI timed out after ${timeoutMs / 1000} seconds.`)
+      );
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function parseJsonObject(value: string): unknown {

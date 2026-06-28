@@ -296,6 +296,14 @@
         responseOutput.textContent = JSON.stringify(value, null, 2);
       }
 
+      function describeRequestError(error) {
+        if (error.name === "AbortError") {
+          return "Request timed out. Check Worker logs for the matching request.";
+        }
+
+        return error.message || "Request failed.";
+      }
+
       function parseInput() {
         try {
           inputStatus.textContent = "";
@@ -306,15 +314,46 @@
         }
       }
 
-      async function postJson(path, payload) {
-        const response = await fetch(path, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
-        return response.json();
+      async function postJson(path, payload, timeoutMs = 55000) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, timeoutMs);
+
+        try {
+          const response = await fetch(path, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+
+          const requestId = response.headers.get("X-Request-Id");
+          let body;
+
+          try {
+            body = await response.json();
+          } catch {
+            body = {
+              success: false,
+              error: {
+                code: "INVALID_RESPONSE",
+                message: "The server did not return JSON."
+              }
+            };
+          }
+
+          return {
+            ok: response.ok,
+            status: response.status,
+            requestId,
+            body
+          };
+        } finally {
+          clearTimeout(timeoutId);
+        }
       }
 
       sampleButton.addEventListener("click", () => {
@@ -333,10 +372,19 @@
 
         try {
           const result = await postJson("/api/suggestion-runs", payload);
-          setResponse(result);
-          responseStatus.textContent = "Suggestion run received.";
-        } catch {
-          responseStatus.textContent = "Request failed.";
+          setResponse(result.body);
+          responseStatus.textContent = result.ok
+            ? `Suggestion run received. Request ID: ${result.requestId ?? "not provided"}.`
+            : `Request failed with HTTP ${result.status}. Request ID: ${result.requestId ?? "not provided"}.`;
+        } catch (error) {
+          setResponse({
+            success: false,
+            error: {
+              code: error.name === "AbortError" ? "REQUEST_TIMEOUT" : "REQUEST_FAILED",
+              message: describeRequestError(error)
+            }
+          });
+          responseStatus.textContent = describeRequestError(error);
         } finally {
           runButton.disabled = false;
         }
@@ -352,10 +400,19 @@
               source: "frontend-placeholder"
             }
           });
-          setResponse(result);
-          responseStatus.textContent = "Stub response received.";
-        } catch {
-          responseStatus.textContent = "Request failed.";
+          setResponse(result.body);
+          responseStatus.textContent = result.ok
+            ? `Accepted-posting response received. Request ID: ${result.requestId ?? "not provided"}.`
+            : `Request failed with HTTP ${result.status}. Request ID: ${result.requestId ?? "not provided"}.`;
+        } catch (error) {
+          setResponse({
+            success: false,
+            error: {
+              code: error.name === "AbortError" ? "REQUEST_TIMEOUT" : "REQUEST_FAILED",
+              message: describeRequestError(error)
+            }
+          });
+          responseStatus.textContent = describeRequestError(error);
         } finally {
           acceptButton.disabled = false;
         }
