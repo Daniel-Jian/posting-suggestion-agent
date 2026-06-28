@@ -230,55 +230,6 @@
       const sampleButton = document.querySelector("#sample-button");
       const acceptButton = document.querySelector("#accept-button");
 
-      const sampleCases = {
-        cases: [
-          {
-            id: "case_001",
-            transaction: {
-              id: "tx_001",
-              source: "bank",
-              booking_date: "2026-01-18",
-              counterparty_name: "Amazon Payments Europe",
-              purpose: "Amazon Business Rechnung DE-2026-001",
-              amount: -119,
-              currency: "EUR"
-            },
-            candidate_receipts: [
-              {
-                id: "rcpt_001",
-                type: "incoming_invoice",
-                supplier_name: "Amazon Business",
-                invoice_number: "DE-2026-001",
-                invoice_date: "2026-01-15",
-                currency: "EUR",
-                gross_amount: 119,
-                net_amount: 100,
-                vat_amount: 19,
-                vat_rate: 19,
-                description: "Buerobedarf: Druckerpapier und Stifte",
-                ocr_text: "Amazon Business Rechnung DE-2026-001 Buerobedarf 119,00 EUR inkl. 19% MwSt"
-              }
-            ]
-          }
-        ],
-        accounts: [
-          {
-            code: "4930",
-            name: "Buerobedarf",
-            type: "expense",
-            description: "Bueromaterial und kleinere Arbeitsmittel",
-            examples: ["druckerpapier", "stifte", "buerobedarf"]
-          },
-          {
-            code: "4600",
-            name: "Werbekosten",
-            type: "expense",
-            description: "Werbung und Marketingaufwendungen",
-            examples: ["google ads", "facebook ads", "online marketing"]
-          }
-        ]
-      };
-
       function setResponse(value) {
         responseOutput.value = JSON.stringify(value, null, 2);
       }
@@ -353,10 +304,53 @@
         }
       }
 
-      sampleButton.addEventListener("click", () => {
-        casesInput.value = JSON.stringify(sampleCases, null, 2);
-        inputStatus.textContent = "";
-      });
+      async function getJson(path) {
+        const response = await fetch(path);
+        let body;
+
+        try {
+          body = await response.json();
+        } catch {
+          throw new Error("The server did not return JSON.");
+        }
+
+        if (!response.ok) {
+          throw new Error(`Request failed with HTTP ${response.status}.`);
+        }
+
+        return body;
+      }
+
+      function readSampleDataResponse(body) {
+        if (
+          !body ||
+          body.success !== true ||
+          !body.data ||
+          !Array.isArray(body.data.cases) ||
+          !Array.isArray(body.data.accounts)
+        ) {
+          throw new Error("Sample data response is invalid.");
+        }
+
+        return body.data;
+      }
+
+      async function loadSampleData() {
+        sampleButton.disabled = true;
+        inputStatus.textContent = "Loading sample data.";
+
+        try {
+          const body = await getJson("/api/sample-data");
+          casesInput.value = JSON.stringify(readSampleDataResponse(body), null, 2);
+          inputStatus.textContent = "Sample data loaded.";
+        } catch (error) {
+          inputStatus.textContent = error.message || "Sample data could not be loaded.";
+        } finally {
+          sampleButton.disabled = false;
+        }
+      }
+
+      sampleButton.addEventListener("click", loadSampleData);
 
       runButton.addEventListener("click", async () => {
         const payload = parseInput();
@@ -416,7 +410,7 @@
         }
       });
 
-      casesInput.value = JSON.stringify(sampleCases, null, 2);
+      loadSampleData();
     </script>
   </body>
 </html>

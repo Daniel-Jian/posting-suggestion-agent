@@ -40,8 +40,6 @@ stubbed.
 
 ## Frontend
 
-- Load sample data from `GET /api/sample-data` or remove the duplicate inline
-  sample object.
 - Allow the user to approve or edit a selected suggestion.
 - Show clear success and error states for real API responses.
 
