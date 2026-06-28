@@ -29,16 +29,6 @@ stubbed.
 
 - Improve prompt examples if first manual tests produce weak suggestions.
 - Add confidence post-processing from `src/services/confidence.ts`.
-- Decide whether later runs should call Vectorize before the LLM once accepted
-  postings exist.
-
-## Embeddings and vector memory
-
-- Query Vectorize for similar accepted postings when creating suggestions after
-  accepted posting storage is implemented.
-- Implement `findSimilarAcceptedPostings` in
-  `src/services/vectorMemory.ts`.
-- Handle missing or empty vector search results gracefully.
 
 ## D1 storage
 

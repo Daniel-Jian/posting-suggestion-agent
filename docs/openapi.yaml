@@ -9,7 +9,7 @@ paths:
   /api/suggestion-runs:
     post:
       summary: Create posting suggestions from unresolved cases
-      description: Creates first-run posting suggestions with Workers AI. Retrieval is not used until accepted postings exist.
+      description: Creates posting suggestions with Workers AI and similar accepted postings from Vectorize when available.
       requestBody:
         required: true
         content:
@@ -310,7 +310,6 @@ components:
           properties:
             retrieval_used:
               type: boolean
-              const: false
             llm_used:
               type: boolean
               const: true

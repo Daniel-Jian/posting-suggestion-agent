@@ -1,7 +1,9 @@
 import { buildSuggestionPrompt, buildSystemPrompt } from "./promptBuilder";
+import { findSimilarAcceptedPostings, type RetrievedSimilarPosting } from "./vectorMemory";
 import type {
   PostingDecision,
   PostingSuggestion,
+  SimilarPostingExample,
   SuggestionRunRequest,
   SuggestionRunResponse,
   SuggestedPosting
@@ -76,8 +78,15 @@ export async function createPostingSuggestions(
   const suggestions: PostingSuggestion[] = [];
 
   for (const unresolvedCase of input.cases) {
-    const rawSuggestion = await generatePostingSuggestion(env, input, unresolvedCase.id, options);
-    suggestions.push(normalizeSuggestion(rawSuggestion, env.LLM_MODEL));
+    const similarExamples = await getSimilarAcceptedPostings(env, unresolvedCase, options);
+    const rawSuggestion = await generatePostingSuggestion(
+      env,
+      input,
+      unresolvedCase.id,
+      similarExamples,
+      options
+    );
+    suggestions.push(normalizeSuggestion(rawSuggestion, env.LLM_MODEL, similarExamples));
   }
 
   return {
@@ -102,6 +111,7 @@ async function generatePostingSuggestion(
   env: Env,
   input: SuggestionRunRequest,
   caseId: string,
+  similarAcceptedPostings: RetrievedSimilarPosting[],
   options: {
     log?: SuggestionRunLogger;
     timeoutMs?: number;
@@ -133,7 +143,8 @@ async function generatePostingSuggestion(
           role: "user",
           content: buildSuggestionPrompt({
             unresolvedCase,
-            accounts: input.accounts
+            accounts: input.accounts,
+            similarAcceptedPostings
           })
         }
       ],
@@ -170,6 +181,36 @@ async function generatePostingSuggestion(
     });
 
     throw err;
+  }
+}
+
+async function getSimilarAcceptedPostings(
+  env: Env,
+  unresolvedCase: SuggestionRunRequest["cases"][number],
+  options: {
+    log?: SuggestionRunLogger;
+  }
+): Promise<RetrievedSimilarPosting[]> {
+  try {
+    const similarExamples = await findSimilarAcceptedPostings(env, unresolvedCase, {
+      topK: 3,
+      minScore: 0.65
+    });
+
+    options.log?.("retrieval_success", {
+      caseId: unresolvedCase.id,
+      similarExampleCount: similarExamples.length
+    });
+
+    return similarExamples;
+  } catch (err) {
+    options.log?.("retrieval_failed", {
+      caseId: unresolvedCase.id,
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      errorMessage: err instanceof Error ? err.message : "Unknown error."
+    });
+
+    return [];
   }
 }
 
@@ -355,7 +396,11 @@ function getValueType(value: unknown): string {
   return typeof value;
 }
 
-function normalizeSuggestion(value: unknown, model: string): PostingSuggestion {
+function normalizeSuggestion(
+  value: unknown,
+  model: string,
+  similarExamples: SimilarPostingExample[]
+): PostingSuggestion {
   if (!isObject(value)) {
     throw new AiSuggestionError("Workers AI returned an invalid suggestion.");
   }
@@ -373,9 +418,9 @@ function normalizeSuggestion(value: unknown, model: string): PostingSuggestion {
     decision,
     evidence: normalizeTextFields([raw.evidence_1, raw.evidence_2]),
     risks: normalizeTextFields([raw.risk_1, raw.risk_2]),
-    similar_examples: [],
+    similar_examples: similarExamples,
     source: {
-      retrieval_used: false,
+      retrieval_used: similarExamples.length > 0,
       llm_used: true,
       model
     }

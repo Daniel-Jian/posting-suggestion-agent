@@ -67,7 +67,7 @@ export async function storeAcceptedPostingsFromRunResponse(
       });
       insertedPostingIds.push(postingId);
 
-      await upsertAcceptedPostingVector(env, vectorId, embedding, {
+      const vectorMetadata = {
         posting_id: postingId,
         run_id: request.data.run_id,
         case_id: suggestion.case_id,
@@ -78,7 +78,17 @@ export async function storeAcceptedPostingsFromRunResponse(
         currency: suggestedPosting.currency,
         posting_text: suggestedPosting.posting_text,
         summary: buildAcceptedPostingSummary(suggestion)
-      });
+      };
+
+      if (typeof suggestedPosting.vat_rate === "number") {
+        await upsertAcceptedPostingVector(env, vectorId, embedding, {
+          ...vectorMetadata,
+          vat_rate: suggestedPosting.vat_rate
+        });
+      } else {
+        await upsertAcceptedPostingVector(env, vectorId, embedding, vectorMetadata);
+      }
+
       upsertedVectorIds.push(vectorId);
     }
   } catch (err) {

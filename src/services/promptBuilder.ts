@@ -1,4 +1,5 @@
 import type { Account, UnresolvedCase } from "../types";
+import type { RetrievedSimilarPosting } from "./vectorMemory";
 
 const outputFields =
   "case_id, transaction_id, matched_receipt_id, account_code, account_name, vat_rate, amount_gross, currency, posting_text, confidence, decision, evidence_1, evidence_2, risk_1, risk_2";
@@ -23,6 +24,7 @@ export function buildSystemPrompt(): string {
 export function buildSuggestionPrompt(input: {
   unresolvedCase: UnresolvedCase;
   accounts: Account[];
+  similarAcceptedPostings?: RetrievedSimilarPosting[];
 }): string {
   const { deterministic_context: _deterministicContext, ...modelCase } = input.unresolvedCase;
 
@@ -32,7 +34,16 @@ export function buildSuggestionPrompt(input: {
       output_fields: outputFields,
       allowed_decisions: ["auto_post_candidate", "needs_human_approval", "manual_review"],
       case: modelCase,
-      accounts: input.accounts
+      accounts: input.accounts,
+      similar_accepted_postings: (input.similarAcceptedPostings ?? []).map((posting) => ({
+        score: posting.score,
+        account_code: posting.account_code,
+        account_name: posting.account_name,
+        amount_gross: posting.amount_gross,
+        currency: posting.currency,
+        posting_text: posting.posting_text,
+        summary: posting.summary
+      }))
     },
     null,
     0

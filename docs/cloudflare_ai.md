@@ -9,9 +9,9 @@ LLM_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
 EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b"
 ```
 
-The first-run `POST /api/suggestion-runs` flow uses only the LLM model.
-Embeddings and Vectorize are configured for the later learning loop, after
-accepted postings exist.
+The `POST /api/suggestion-runs` flow uses the embedding model to retrieve
+similar accepted postings from Vectorize, then calls the LLM model for the
+posting suggestion.
 
 ## 1. Confirm Workers AI access
 
@@ -65,8 +65,8 @@ EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b"
 The LLM model is used for posting suggestions, confidence explanation, evidence,
 risk explanation, and human-review guidance.
 
-The embedding model is reserved for accepted postings and future Vectorize
-retrieval.
+The embedding model is used for accepted posting storage and suggestion-time
+Vectorize retrieval.
 
 Embedding model reference:
 
@@ -106,12 +106,12 @@ JSON mode reference:
 https://developers.cloudflare.com/workers-ai/features/json-mode/
 ```
 
-## 5. Vectorize setup for later runs
+## 5. Vectorize setup
 
-The first run intentionally skips embeddings and Vectorize because there are no
-accepted postings yet.
+Suggestion runs query Vectorize for similar accepted postings. If retrieval
+fails, the Worker logs `retrieval_failed` and continues without examples.
 
-The project still declares the Vectorize binding for the later learning loop:
+The project declares the Vectorize binding:
 
 ```toml
 [[vectorize]]
@@ -119,7 +119,7 @@ binding = "POSTING_INDEX"
 index_name = "posting-suggestion-agent-postings"
 ```
 
-Before implementing accepted-posting storage and retrieval:
+Before running the full learning loop:
 
 1. Open the Cloudflare dashboard.
 2. Open **Workers & Pages**.
@@ -147,6 +147,7 @@ Log events to expect:
 ```text
 request_received
 request_validated
+retrieval_success
 ai_start
 ai_success
 ai_parse_start
@@ -158,6 +159,12 @@ If parsing fails after Workers AI returns, expect:
 
 ```text
 ai_parse_failed
+```
+
+If retrieval fails before the LLM call, expect:
+
+```text
+retrieval_failed
 ```
 
 This event logs the response kind, object keys, `response` field type, whether
