@@ -12,11 +12,18 @@ type RawAiResponse = {
   usage?: unknown;
 };
 
-type AiResponseTextDetails = {
-  text: string;
-  selectedField: string;
+type AiResponseJsonDetails = {
+  value: unknown;
+  source: "raw_string" | "response_string" | "response_object";
+};
+
+type AiResponseParseFailureDetails = {
   responseKind: string;
   responseKeys: string[];
+  responseFieldType: string;
+  responseFieldIsArray: boolean;
+  responseFieldKeys?: string[];
+  text?: string;
 };
 
 type RawPostingSuggestion = {
@@ -105,7 +112,6 @@ export async function createPostingSuggestions(
 
   for (const unresolvedCase of input.cases) {
     const rawSuggestion = await generatePostingSuggestion(env, input, unresolvedCase.id, options);
-    options.log?.("ai_parse_start", { caseId: unresolvedCase.id });
     suggestions.push(normalizeSuggestion(rawSuggestion, env.LLM_MODEL));
   }
 
@@ -181,14 +187,21 @@ async function generatePostingSuggestion(
     usage: typeof response === "object" && response !== null ? response.usage : undefined
   });
 
-  const responseTextDetails = getAiResponseTextDetails(response);
+  options.log?.("ai_parse_start", { caseId });
 
   try {
-    return parseJsonObject(responseTextDetails.text);
+    const parsedResponse = parseAiJsonResponse(response);
+
+    options.log?.("ai_parse_success", {
+      caseId,
+      source: parsedResponse.source
+    });
+
+    return parsedResponse.value;
   } catch (err) {
     options.log?.("ai_parse_failed", {
       caseId,
-      ...summarizeAiResponseText(responseTextDetails)
+      ...summarizeAiParseFailure(response)
     });
 
     throw err;
@@ -234,49 +247,116 @@ function parseJsonObject(value: string): unknown {
   }
 }
 
-function getAiResponseTextDetails(response: RawAiResponse | string): AiResponseTextDetails {
+function parseAiJsonResponse(response: RawAiResponse | string): AiResponseJsonDetails {
   if (typeof response === "string") {
     return {
-      text: response,
-      selectedField: "raw_string",
+      value: parseJsonObject(response),
+      source: "raw_string"
+    };
+  }
+
+  if (!isObject(response)) {
+    throw new AiSuggestionError("Workers AI did not return JSON.");
+  }
+
+  const responseField = response.response;
+
+  if (typeof responseField === "string") {
+    return {
+      value: parseJsonObject(responseField),
+      source: "response_string"
+    };
+  }
+
+  if (isObject(responseField)) {
+    return {
+      value: responseField,
+      source: "response_object"
+    };
+  }
+
+  throw new AiSuggestionError("Workers AI did not return JSON.");
+}
+
+function summarizeAiParseFailure(response: RawAiResponse | string): Record<string, unknown> {
+  const details = getAiResponseParseFailureDetails(response);
+  const summary: Record<string, unknown> = {
+    responseKind: details.responseKind,
+    responseKeys: details.responseKeys,
+    responseFieldType: details.responseFieldType,
+    responseFieldIsArray: details.responseFieldIsArray
+  };
+
+  if (details.responseFieldKeys) {
+    summary.responseFieldKeys = details.responseFieldKeys;
+  }
+
+  if (typeof details.text === "string") {
+    summary.textLength = details.text.length;
+    summary.containsOpeningBrace = details.text.includes("{");
+    summary.containsClosingBrace = details.text.includes("}");
+    summary.textExcerpt = details.text.slice(0, 500);
+  }
+
+  return summary;
+}
+
+function getAiResponseParseFailureDetails(
+  response: RawAiResponse | string
+): AiResponseParseFailureDetails {
+  if (typeof response === "string") {
+    return {
       responseKind: "string",
-      responseKeys: []
+      responseKeys: [],
+      responseFieldType: "missing",
+      responseFieldIsArray: false,
+      text: response
     };
   }
 
   if (!isObject(response)) {
     return {
-      text: "",
-      selectedField: "none",
       responseKind: response === null ? "null" : typeof response,
-      responseKeys: []
+      responseKeys: [],
+      responseFieldType: "missing",
+      responseFieldIsArray: false
     };
   }
 
-  const responseKeys = Object.keys(response);
-  const responseRecord: Record<string, unknown> = response;
-  const stringField = ["response", "result", "text", "message"].find(
-    (field) => typeof responseRecord[field] === "string"
-  );
-
-  return {
-    text: stringField ? String(responseRecord[stringField]) : "",
-    selectedField: stringField ?? "none",
+  const responseField = response.response;
+  const responseFieldIsArray = Array.isArray(responseField);
+  const details: AiResponseParseFailureDetails = {
     responseKind: "object",
-    responseKeys
+    responseKeys: Object.keys(response),
+    responseFieldType: getValueType(responseField),
+    responseFieldIsArray
   };
+
+  if (isObject(responseField)) {
+    details.responseFieldKeys = Object.keys(responseField);
+  }
+
+  if (typeof responseField === "string") {
+    details.text = responseField;
+  }
+
+  return details;
 }
 
-function summarizeAiResponseText(details: AiResponseTextDetails): Record<string, unknown> {
-  return {
-    responseKind: details.responseKind,
-    responseKeys: details.responseKeys,
-    selectedField: details.selectedField,
-    textLength: details.text.length,
-    containsOpeningBrace: details.text.includes("{"),
-    containsClosingBrace: details.text.includes("}"),
-    textExcerpt: details.text.slice(0, 500)
-  };
+function getValueType(value: unknown): string {
+  if (value === undefined) {
+    return "missing";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  return typeof value;
 }
 
 function normalizeSuggestion(value: unknown, model: string): PostingSuggestion {

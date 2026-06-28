@@ -151,6 +151,7 @@ request_validated
 ai_start
 ai_success
 ai_parse_start
+ai_parse_success
 response_success
 ```
 
@@ -160,9 +161,9 @@ If parsing fails after Workers AI returns, expect:
 ai_parse_failed
 ```
 
-This event logs the response kind, object keys, selected text field, text
-length, whether braces were present, and only the first 500 characters of the
-selected text.
+This event logs the response kind, object keys, `response` field type, whether
+the `response` field was an array, object keys for object-shaped `response`
+fields, and only the first 500 characters when the failed value was a string.
 
 If the request times out, expect:
 
