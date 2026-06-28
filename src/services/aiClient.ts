@@ -1,4 +1,5 @@
 import { buildSuggestionPrompt, buildSystemPrompt } from "./promptBuilder";
+import { summarizeConfidence } from "./confidence";
 import { findSimilarAcceptedPostings, type RetrievedSimilarPosting } from "./vectorMemory";
 import type {
   PostingDecision,
@@ -86,7 +87,14 @@ export async function createPostingSuggestions(
       similarExamples,
       options
     );
-    suggestions.push(normalizeSuggestion(rawSuggestion, env.LLM_MODEL, similarExamples));
+    const suggestion = normalizeSuggestion(rawSuggestion, env.LLM_MODEL, similarExamples);
+    suggestions.push(
+      summarizeConfidence({
+        suggestion,
+        unresolvedCase,
+        similarExamples
+      })
+    );
   }
 
   return {

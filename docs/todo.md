@@ -28,7 +28,6 @@ stubbed.
 ## AI suggestion flow
 
 - Improve prompt examples if first manual tests produce weak suggestions.
-- Add confidence post-processing from `src/services/confidence.ts`.
 
 ## D1 storage
 
@@ -37,9 +36,6 @@ stubbed.
 
 ## Confidence and review logic
 
-- Implement `summarizeConfidence` in `src/services/confidence.ts`.
-- Define confidence thresholds for "suggest", "needs review", and "unsafe".
-- Combine LLM confidence with retrieval evidence and input completeness.
 - Surface missing evidence or contradictory receipt/transaction details.
 
 ## Frontend
