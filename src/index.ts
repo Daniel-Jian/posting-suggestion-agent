@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 
-import { sampleUnresolvedCases } from "./sampleData";
+import { createPostingSuggestions, AiSuggestionError } from "./services/aiClient";
+import { sampleAccounts, sampleUnresolvedCases } from "./sampleData";
 import type {
   AcceptedPostingRequest,
   ApiErrorResponse,
@@ -45,7 +46,9 @@ function isSuggestionRunRequest(value: unknown): value is SuggestionRunRequest {
     typeof value === "object" &&
     value !== null &&
     "cases" in value &&
-    Array.isArray((value as { cases: unknown }).cases)
+    Array.isArray((value as { cases: unknown }).cases) &&
+    "accounts" in value &&
+    Array.isArray((value as { accounts: unknown }).accounts)
   );
 }
 
@@ -63,16 +66,21 @@ app.post("/api/suggestion-runs", async (c) => {
   const body = await readJsonBody(c);
 
   if (!isSuggestionRunRequest(body)) {
-    return c.json(error("INVALID_REQUEST", "Request body must include a cases array."), 400);
+    return c.json(
+      error("INVALID_REQUEST", "Request body must include cases and accounts arrays."),
+      400
+    );
   }
 
-  return c.json(
-    error(
-      "NOT_IMPLEMENTED",
-      "Suggestion generation is stubbed for the first project scaffold."
-    ),
-    501
-  );
+  try {
+    return c.json(success(await createPostingSuggestions(c.env, body)));
+  } catch (err) {
+    if (err instanceof AiSuggestionError) {
+      return c.json(error("AI_SUGGESTION_FAILED", err.message), 502);
+    }
+
+    throw err;
+  }
 });
 
 app.post("/api/accepted-postings", async (c) => {
@@ -92,7 +100,7 @@ app.post("/api/accepted-postings", async (c) => {
 });
 
 app.get("/api/sample-data", (c) => {
-  return c.json(success({ cases: sampleUnresolvedCases }));
+  return c.json(success({ cases: sampleUnresolvedCases, accounts: sampleAccounts }));
 });
 
 app.all("*", (c) => {

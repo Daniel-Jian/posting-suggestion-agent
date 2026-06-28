@@ -192,7 +192,7 @@
     <header>
       <div class="shell topbar">
         <h1>Posting Suggestion Agent</h1>
-        <div class="status">Backend stubs</div>
+        <div class="status">First-run AI suggestions</div>
       </div>
     </header>
 
@@ -240,12 +240,54 @@
       const sampleCases = {
         cases: [
           {
-            id: "case-1001",
-            receiptText: "Office supplies, stationery and printer paper",
-            transactionText: "CARD PAYMENT OFFICE DEPOT",
-            amount: 84.72,
-            currency: "EUR",
-            bookingDate: "2026-06-15"
+            id: "case_001",
+            transaction: {
+              id: "tx_001",
+              source: "bank",
+              booking_date: "2026-01-18",
+              counterparty_name: "Amazon Payments Europe",
+              purpose: "Amazon Business Rechnung DE-2026-001",
+              amount: -119,
+              currency: "EUR"
+            },
+            candidate_receipts: [
+              {
+                id: "rcpt_001",
+                type: "incoming_invoice",
+                supplier_name: "Amazon Business",
+                invoice_number: "DE-2026-001",
+                invoice_date: "2026-01-15",
+                currency: "EUR",
+                gross_amount: 119,
+                net_amount: 100,
+                vat_amount: 19,
+                vat_rate: 19,
+                description: "Buerobedarf: Druckerpapier und Stifte",
+                ocr_text: "Amazon Business Rechnung DE-2026-001 Buerobedarf 119,00 EUR inkl. 19% MwSt"
+              }
+            ],
+            deterministic_context: {
+              status: "low_confidence",
+              reason: "Regelwerk hat einen moeglichen Beleg gefunden, aber keine zuverlaessige kundenspezifische Kontenzuordnung",
+              candidate_receipt_ids: ["rcpt_001"],
+              candidate_account_codes: ["4930", "4600"]
+            }
+          }
+        ],
+        accounts: [
+          {
+            code: "4930",
+            name: "Buerobedarf",
+            type: "expense",
+            description: "Bueromaterial und kleinere Arbeitsmittel",
+            examples: ["druckerpapier", "stifte", "buerobedarf"]
+          },
+          {
+            code: "4600",
+            name: "Werbekosten",
+            type: "expense",
+            description: "Werbung und Marketingaufwendungen",
+            examples: ["google ads", "facebook ads", "online marketing"]
           }
         ]
       };
@@ -287,12 +329,12 @@
         }
 
         runButton.disabled = true;
-        responseStatus.textContent = "Requesting stub response.";
+        responseStatus.textContent = "Creating suggestion run.";
 
         try {
           const result = await postJson("/api/suggestion-runs", payload);
           setResponse(result);
-          responseStatus.textContent = "Stub response received.";
+          responseStatus.textContent = "Suggestion run received.";
         } catch {
           responseStatus.textContent = "Request failed.";
         } finally {
@@ -302,7 +344,7 @@
 
       acceptButton.addEventListener("click", async () => {
         acceptButton.disabled = true;
-        responseStatus.textContent = "Requesting storage stub response.";
+        responseStatus.textContent = "Requesting accepted-posting storage.";
 
         try {
           const result = await postJson("/api/accepted-postings", {

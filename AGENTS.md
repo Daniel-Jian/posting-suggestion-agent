@@ -2,6 +2,8 @@
 
 ## First Read
 - docs/architecture.md
+- docs/todo.md
+- docs/openapi.yaml
 
 ## Project
 

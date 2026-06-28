@@ -11,7 +11,7 @@ The application demonstrates:
 - REST-style JSON APIs
 - Hono on Cloudflare Workers
 - OpenAPI documentation
-- Workers AI Qwen model for structured posting suggestions
+- Workers AI Llama model for structured posting suggestions
 - Workers AI Qwen embedding model
 - Vectorize for similar accepted postings
 - D1 for audit and accepted posting storage

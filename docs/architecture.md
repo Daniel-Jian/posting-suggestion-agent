@@ -135,7 +135,7 @@ Use only Cloudflare Workers AI.
 Use:
 
 ```text
-@cf/qwen/qwen3-30b-a3b-fp8
+@cf/meta/llama-3.3-70b-instruct-fp8-fast
 ```
 
 Use it for:
@@ -253,7 +253,7 @@ index_name = "posting-suggestion-agent-postings"
 
 [vars]
 APP_NAME = "Posting Suggestion Agent"
-LLM_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+LLM_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b"
 ```
 
@@ -459,7 +459,7 @@ No schema validation is required.
       "source": {
         "retrieval_used": true,
         "llm_used": true,
-        "model": "@cf/qwen/qwen3-30b-a3b-fp8"
+        "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
       }
     }
   ],

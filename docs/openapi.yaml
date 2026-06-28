@@ -1,37 +1,36 @@
 openapi: 3.1.0
 info:
   title: Posting Suggestion Agent API
-  version: 0.1.0
-  description: Prototype API documentation. The first scaffold exposes stubbed backend routes only.
+  version: 0.2.0
+  description: Prototype API documentation for first-run posting suggestions and accepted posting storage.
 servers:
   - url: /
 paths:
   /api/suggestion-runs:
     post:
       summary: Create posting suggestions from unresolved cases
-      description: Stub endpoint for the first project scaffold. It validates the request shape and returns NOT_IMPLEMENTED.
+      description: Creates first-run posting suggestions with Workers AI. Retrieval is not used until accepted postings exist.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - cases
-              properties:
-                cases:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/UnresolvedCase"
+              $ref: "#/components/schemas/SuggestionRunRequest"
       responses:
-        "501":
-          description: Suggestion generation is not implemented yet.
+        "200":
+          description: Suggestion run created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuggestionRunSuccessResponse"
+        "400":
+          description: Invalid request body.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Invalid request body.
+        "502":
+          description: Workers AI did not return a usable suggestion.
           content:
             application/json:
               schema:
@@ -39,7 +38,7 @@ paths:
   /api/accepted-postings:
     post:
       summary: Store a human-approved posting as a learning example
-      description: Stub endpoint for the first project scaffold. It validates the request shape and returns NOT_IMPLEMENTED.
+      description: Stub endpoint. Accepted posting storage is not implemented yet.
       requestBody:
         required: true
         content:
@@ -67,26 +66,299 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
+    SuggestionRunRequest:
+      type: object
+      required:
+        - cases
+        - accounts
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/UnresolvedCase"
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
     UnresolvedCase:
       type: object
       required:
         - id
+        - transaction
       properties:
         id:
           type: string
-        receiptText:
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+        candidate_receipts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Receipt"
+        deterministic_context:
+          $ref: "#/components/schemas/DeterministicContext"
+    Transaction:
+      type: object
+      required:
+        - id
+        - booking_date
+        - amount
+        - currency
+      properties:
+        id:
           type: string
-        transactionText:
+        source:
+          type: string
+        booking_date:
+          type: string
+        value_date:
+          type: string
+        counterparty_name:
+          type: string
+        purpose:
           type: string
         amount:
           type: number
         currency:
           type: string
-        bookingDate:
+        account_iban_last4:
           type: string
-        metadata:
+    Receipt:
+      type: object
+      required:
+        - id
+        - currency
+        - gross_amount
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        supplier_name:
+          type: string
+        customer_name:
+          type: string
+        invoice_number:
+          type: string
+        invoice_date:
+          type: string
+        due_date:
+          type: string
+        currency:
+          type: string
+        gross_amount:
+          type: number
+        net_amount:
+          type: number
+        vat_amount:
+          type: number
+        vat_rate:
+          type:
+            - number
+            - "null"
+        description:
+          type: string
+        ocr_text:
+          type: string
+    DeterministicContext:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - unmatched
+            - low_confidence
+            - multiple_candidates
+            - unsupported_case
+        reason:
+          type: string
+        candidate_receipt_ids:
+          type: array
+          items:
+            type: string
+        candidate_account_codes:
+          type: array
+          items:
+            type: string
+    Account:
+      type: object
+      required:
+        - code
+        - name
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+            - expense
+            - revenue
+            - asset
+            - liability
+            - bank
+            - tax
+            - clearing
+        description:
+          type: string
+        examples:
+          type: array
+          items:
+            type: string
+    SuggestionRunSuccessResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
           type: object
-          additionalProperties: true
+          required:
+            - run_id
+            - suggestions
+            - summary
+          properties:
+            run_id:
+              type: string
+            suggestions:
+              type: array
+              items:
+                $ref: "#/components/schemas/PostingSuggestion"
+            summary:
+              $ref: "#/components/schemas/SuggestionRunSummary"
+    PostingSuggestion:
+      type: object
+      required:
+        - case_id
+        - transaction_id
+        - matched_receipt_id
+        - suggested_posting
+        - confidence
+        - decision
+        - evidence
+        - risks
+        - similar_examples
+        - source
+      properties:
+        case_id:
+          type: string
+        transaction_id:
+          type: string
+        matched_receipt_id:
+          type:
+            - string
+            - "null"
+        suggested_posting:
+          $ref: "#/components/schemas/SuggestedPosting"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        decision:
+          type: string
+          enum:
+            - auto_post_candidate
+            - needs_human_approval
+            - manual_review
+        evidence:
+          type: array
+          items:
+            type: string
+        risks:
+          type: array
+          items:
+            type: string
+        similar_examples:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimilarPostingExample"
+        source:
+          type: object
+          required:
+            - retrieval_used
+            - llm_used
+            - model
+          properties:
+            retrieval_used:
+              type: boolean
+              const: false
+            llm_used:
+              type: boolean
+              const: true
+            model:
+              type: string
+              example: "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+    SuggestedPosting:
+      type: object
+      required:
+        - account_code
+        - account_name
+        - amount_gross
+        - currency
+        - posting_text
+      properties:
+        account_code:
+          type: string
+        account_name:
+          type: string
+        vat_rate:
+          type:
+            - number
+            - "null"
+        amount_gross:
+          type: number
+        currency:
+          type: string
+        posting_text:
+          type: string
+    SimilarPostingExample:
+      type: object
+      required:
+        - id
+        - score
+        - account_code
+        - account_name
+        - posting_text
+        - summary
+      properties:
+        id:
+          type: string
+        score:
+          type: number
+        account_code:
+          type: string
+        account_name:
+          type: string
+        vat_rate:
+          type:
+            - number
+            - "null"
+        posting_text:
+          type: string
+        summary:
+          type: string
+    SuggestionRunSummary:
+      type: object
+      required:
+        - case_count
+        - suggestion_count
+        - auto_post_candidates
+        - needs_human_approval
+        - manual_review
+      properties:
+        case_count:
+          type: integer
+        suggestion_count:
+          type: integer
+        auto_post_candidates:
+          type: integer
+        needs_human_approval:
+          type: integer
+        manual_review:
+          type: integer
     ErrorResponse:
       type: object
       required:
