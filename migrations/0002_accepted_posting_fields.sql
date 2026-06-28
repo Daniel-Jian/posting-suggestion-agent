@@ -1,38 +1,26 @@
-ALTER TABLE accepted_postings
-  ADD COLUMN run_id TEXT;
+DROP TABLE IF EXISTS accepted_postings;
 
-ALTER TABLE accepted_postings
-  ADD COLUMN transaction_id TEXT;
+CREATE TABLE accepted_postings (
+  id TEXT PRIMARY KEY,
+  source_case_id TEXT,
+  posting_json TEXT NOT NULL,
+  run_id TEXT,
+  transaction_id TEXT NOT NULL,
+  matched_receipt_id TEXT,
+  account_code TEXT NOT NULL,
+  account_name TEXT NOT NULL,
+  vat_rate REAL,
+  amount_gross REAL NOT NULL,
+  currency TEXT NOT NULL,
+  posting_text TEXT NOT NULL,
+  confidence REAL,
+  embedding_text TEXT NOT NULL,
+  vector_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-ALTER TABLE accepted_postings
-  ADD COLUMN matched_receipt_id TEXT;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN account_code TEXT;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN account_name TEXT;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN vat_rate REAL;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN amount_gross REAL;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN currency TEXT;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN posting_text TEXT;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN confidence REAL;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN embedding_text TEXT;
-
-ALTER TABLE accepted_postings
-  ADD COLUMN vector_id TEXT;
+CREATE INDEX accepted_postings_source_case_id_idx
+  ON accepted_postings (source_case_id);
 
 CREATE INDEX accepted_postings_vector_id_idx
   ON accepted_postings (vector_id);
