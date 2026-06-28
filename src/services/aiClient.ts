@@ -12,6 +12,13 @@ type RawAiResponse = {
   usage?: unknown;
 };
 
+type AiResponseTextDetails = {
+  text: string;
+  selectedField: string;
+  responseKind: string;
+  responseKeys: string[];
+};
+
 type RawPostingSuggestion = {
   case_id?: unknown;
   transaction_id?: unknown;
@@ -174,8 +181,18 @@ async function generatePostingSuggestion(
     usage: typeof response === "object" && response !== null ? response.usage : undefined
   });
 
-  const responseText = typeof response === "string" ? response : String(response.response ?? "");
-  return parseJsonObject(responseText);
+  const responseTextDetails = getAiResponseTextDetails(response);
+
+  try {
+    return parseJsonObject(responseTextDetails.text);
+  } catch (err) {
+    options.log?.("ai_parse_failed", {
+      caseId,
+      ...summarizeAiResponseText(responseTextDetails)
+    });
+
+    throw err;
+  }
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -215,6 +232,51 @@ function parseJsonObject(value: string): unknown {
       throw new AiSuggestionError("Workers AI returned malformed JSON.");
     }
   }
+}
+
+function getAiResponseTextDetails(response: RawAiResponse | string): AiResponseTextDetails {
+  if (typeof response === "string") {
+    return {
+      text: response,
+      selectedField: "raw_string",
+      responseKind: "string",
+      responseKeys: []
+    };
+  }
+
+  if (!isObject(response)) {
+    return {
+      text: "",
+      selectedField: "none",
+      responseKind: response === null ? "null" : typeof response,
+      responseKeys: []
+    };
+  }
+
+  const responseKeys = Object.keys(response);
+  const responseRecord: Record<string, unknown> = response;
+  const stringField = ["response", "result", "text", "message"].find(
+    (field) => typeof responseRecord[field] === "string"
+  );
+
+  return {
+    text: stringField ? String(responseRecord[stringField]) : "",
+    selectedField: stringField ?? "none",
+    responseKind: "object",
+    responseKeys
+  };
+}
+
+function summarizeAiResponseText(details: AiResponseTextDetails): Record<string, unknown> {
+  return {
+    responseKind: details.responseKind,
+    responseKeys: details.responseKeys,
+    selectedField: details.selectedField,
+    textLength: details.text.length,
+    containsOpeningBrace: details.text.includes("{"),
+    containsClosingBrace: details.text.includes("}"),
+    textExcerpt: details.text.slice(0, 500)
+  };
 }
 
 function normalizeSuggestion(value: unknown, model: string): PostingSuggestion {

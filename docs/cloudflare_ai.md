@@ -154,6 +154,16 @@ ai_parse_start
 response_success
 ```
 
+If parsing fails after Workers AI returns, expect:
+
+```text
+ai_parse_failed
+```
+
+This event logs the response kind, object keys, selected text field, text
+length, whether braces were present, and only the first 500 characters of the
+selected text.
+
 If the request times out, expect:
 
 ```text
@@ -167,8 +177,9 @@ request_error
 ```
 
 The logs intentionally include only safe metadata such as request ID, case
-count, account count, model name, duration, and error message. They do not log
-full receipt text, prompts, account lists, or raw model output.
+count, account count, model name, duration, error message, and a short response
+excerpt on parse failure. They do not log full receipt text, prompts, account
+lists, or full raw model output.
 
 To inspect logs in Cloudflare:
 
