@@ -7,7 +7,7 @@ interface __BaseEnv_Env {
 	AI: Ai;
 	ASSETS: Fetcher;
 	APP_NAME: "Posting Suggestion Agent";
-	LLM_MODEL: "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+	LLM_MODEL: "@cf/qwen/qwen3-30b-a3b-fp8";
 	EMBEDDING_MODEL: "@cf/qwen/qwen3-embedding-0.6b";
 }
 declare namespace Cloudflare {

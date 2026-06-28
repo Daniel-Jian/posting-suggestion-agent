@@ -5,7 +5,7 @@ This project uses Cloudflare Workers AI through the Worker `AI` binding.
 Current models:
 
 ```text
-LLM_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+LLM_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
 EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b"
 ```
 
@@ -20,12 +20,12 @@ accepted postings exist.
 3. Open **Workers & Pages**.
 4. Open **AI** or **Workers AI**.
 5. Use the model browser or playground to confirm that this account can run:
-   `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.
+   `@cf/qwen/qwen3-30b-a3b-fp8`.
 
 Cloudflare model reference:
 
 ```text
-https://developers.cloudflare.com/workers-ai/models/llama-3.3-70b-instruct-fp8-fast/
+https://developers.cloudflare.com/workers-ai/models/qwen3-30b-a3b-fp8/
 ```
 
 ## 2. Confirm the Worker AI binding
@@ -58,7 +58,7 @@ The Worker uses environment variables from `wrangler.toml`:
 ```toml
 [vars]
 APP_NAME = "Posting Suggestion Agent"
-LLM_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+LLM_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
 EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b"
 ```
 
@@ -78,23 +78,22 @@ https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/
 
 The suggestion route asks the LLM for JSON output with `response_format`.
 
-The route uses a deliberately simple model-facing schema named `flat_v1`.
-The schema avoids nested objects, arrays, nullable union types, and enum
-constraints. The Worker maps that flat response back into the public nested API
-response.
+The route uses JSON Object Mode plus a deliberately flat model-facing response
+shape named `flat_v1`. The Worker maps that flat response back into the public
+nested API response.
 
 The current generation settings use:
 
 ```text
-response_format.type = "json_schema"
+response_format.type = "json_object"
 schemaVersion = "flat_v1"
-max_tokens = 2000
+max_tokens = 700
 ```
 
 Cloudflare supports JSON output mode for compatible text generation models, but
-schema mode can still fail if the requested schema or prompt is too complex. If
-Workers AI returns malformed or incompatible JSON, the API returns a consistent
-JSON error instead of returning raw model text.
+model output can still be malformed. If Workers AI returns malformed or
+incompatible JSON, the API returns a consistent JSON error instead of returning
+raw model text.
 
 `max_tokens` is set in Worker code, not in the Cloudflare Worker settings page.
 To inspect token usage, open Cloudflare Worker Live Logs and look for the
@@ -163,7 +162,8 @@ ai_parse_failed
 
 This event logs the response kind, object keys, `response` field type, whether
 the `response` field was an array, object keys for object-shaped `response`
-fields, and only the first 500 characters when the failed value was a string.
+fields, and only the first 500 characters when the failed value was a string or
+chat-completion message.
 
 If the request times out, expect:
 

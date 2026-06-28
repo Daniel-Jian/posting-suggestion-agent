@@ -8,13 +8,14 @@ import type {
 } from "../types";
 
 type RawAiResponse = {
+  choices?: unknown;
   response?: unknown;
   usage?: unknown;
 };
 
 type AiResponseJsonDetails = {
   value: unknown;
-  source: "raw_string" | "response_string" | "response_object";
+  source: "raw_string" | "response_string" | "response_object" | "choices_message";
 };
 
 type AiResponseParseFailureDetails = {
@@ -45,44 +46,8 @@ type RawPostingSuggestion = {
 };
 
 const suggestionSchemaVersion = "flat_v1";
-
-const suggestionResponseSchema = {
-  type: "object",
-  required: [
-    "case_id",
-    "transaction_id",
-    "matched_receipt_id",
-    "account_code",
-    "account_name",
-    "vat_rate",
-    "amount_gross",
-    "currency",
-    "posting_text",
-    "confidence",
-    "decision",
-    "evidence_1",
-    "evidence_2",
-    "risk_1",
-    "risk_2"
-  ],
-  properties: {
-    case_id: { type: "string" },
-    transaction_id: { type: "string" },
-    matched_receipt_id: { type: "string" },
-    account_code: { type: "string" },
-    account_name: { type: "string" },
-    vat_rate: { type: "number" },
-    amount_gross: { type: "number" },
-    currency: { type: "string" },
-    posting_text: { type: "string" },
-    confidence: { type: "number" },
-    decision: { type: "string" },
-    evidence_1: { type: "string" },
-    evidence_2: { type: "string" },
-    risk_1: { type: "string" },
-    risk_2: { type: "string" }
-  }
-};
+const suggestionResponseFormat = "json_object";
+const suggestionMaxTokens = 700;
 
 export class AiSuggestionError extends Error {
   constructor(message: string) {
@@ -152,7 +117,8 @@ async function generatePostingSuggestion(
     caseId,
     model: env.LLM_MODEL,
     schemaVersion: suggestionSchemaVersion,
-    maxTokens: 2000
+    responseFormat: suggestionResponseFormat,
+    maxTokens: suggestionMaxTokens
   });
 
   const startedAt = Date.now();
@@ -172,11 +138,10 @@ async function generatePostingSuggestion(
         }
       ],
       response_format: {
-        type: "json_schema",
-        json_schema: suggestionResponseSchema
+        type: suggestionResponseFormat
       },
       temperature: 0.1,
-      max_tokens: 2000
+      max_tokens: suggestionMaxTokens
     }),
     options.timeoutMs ?? 45000
   )) as RawAiResponse | string;
@@ -275,6 +240,15 @@ function parseAiJsonResponse(response: RawAiResponse | string): AiResponseJsonDe
     };
   }
 
+  const choiceMessageContent = getChoiceMessageContent(response);
+
+  if (typeof choiceMessageContent === "string") {
+    return {
+      value: parseJsonObject(choiceMessageContent),
+      source: "choices_message"
+    };
+  }
+
   throw new AiSuggestionError("Workers AI did not return JSON.");
 }
 
@@ -340,7 +314,29 @@ function getAiResponseParseFailureDetails(
     details.text = responseField;
   }
 
+  const choiceMessageContent = getChoiceMessageContent(response);
+
+  if (typeof choiceMessageContent === "string") {
+    details.text = choiceMessageContent;
+  }
+
   return details;
+}
+
+function getChoiceMessageContent(response: Record<string, unknown>): string | undefined {
+  if (!Array.isArray(response.choices) || response.choices.length === 0) {
+    return undefined;
+  }
+
+  const firstChoice = response.choices[0];
+
+  if (!isObject(firstChoice) || !isObject(firstChoice.message)) {
+    return undefined;
+  }
+
+  return typeof firstChoice.message.content === "string"
+    ? firstChoice.message.content
+    : undefined;
 }
 
 function getValueType(value: unknown): string {

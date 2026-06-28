@@ -316,7 +316,7 @@ components:
               const: true
             model:
               type: string
-              example: "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+              example: "@cf/qwen/qwen3-30b-a3b-fp8"
     SuggestedPosting:
       type: object
       required:

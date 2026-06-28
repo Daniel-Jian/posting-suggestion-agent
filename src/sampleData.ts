@@ -27,30 +27,7 @@ export const sampleUnresolvedCases: UnresolvedCase[] = [
         description: "Buerobedarf: Druckerpapier und Stifte",
         ocr_text: "Amazon Business Rechnung DE-2026-001 Buerobedarf 119,00 EUR inkl. 19% MwSt"
       }
-    ],
-    deterministic_context: {
-      status: "low_confidence",
-      reason: "Regelwerk hat einen moeglichen Beleg gefunden, aber keine zuverlaessige kundenspezifische Kontenzuordnung",
-      candidate_receipt_ids: ["rcpt_001"],
-      candidate_account_codes: ["4930", "4600"]
-    }
-  },
-  {
-    id: "case_002",
-    transaction: {
-      id: "tx_002",
-      source: "bank",
-      booking_date: "2026-01-25",
-      counterparty_name: "Stripe Payments Europe",
-      purpose: "Stripe-Auszahlung Januar-Sammelzahlung nach Gebuehren und Erstattungen",
-      amount: 967.2,
-      currency: "EUR"
-    },
-    candidate_receipts: [],
-    deterministic_context: {
-      status: "unsupported_case",
-      reason: "Zahlungsanbieter-Auszahlung kann Umsaetze, Gebuehren, Erstattungen und Splitbuchungen enthalten"
-    }
+    ]
   }
 ];
 
@@ -68,12 +45,5 @@ export const sampleAccounts: Account[] = [
     type: "expense",
     description: "Werbung und Marketingaufwendungen",
     examples: ["google ads", "facebook ads", "online marketing"]
-  },
-  {
-    code: "NebenkostenGeldverkehr",
-    name: "Nebenkosten des Geldverkehrs",
-    type: "expense",
-    description: "Zahlungsanbieter- und Bankgebuehren",
-    examples: ["stripe-gebuehr", "paypal-gebuehr", "bankgebuehr"]
   }
 ];
