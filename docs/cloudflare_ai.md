@@ -78,10 +78,28 @@ https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/
 
 The suggestion route asks the LLM for JSON output with `response_format`.
 
+The route uses a deliberately simple model-facing schema named `flat_v1`.
+The schema avoids nested objects, arrays, nullable union types, and enum
+constraints. The Worker maps that flat response back into the public nested API
+response.
+
+The current generation settings use:
+
+```text
+response_format.type = "json_schema"
+schemaVersion = "flat_v1"
+max_tokens = 2000
+```
+
 Cloudflare supports JSON output mode for compatible text generation models, but
-the application still parses and validates the result defensively. If Workers AI
-returns malformed JSON, the API returns a consistent JSON error instead of
-returning raw model text.
+schema mode can still fail if the requested schema or prompt is too complex. If
+Workers AI returns malformed or incompatible JSON, the API returns a consistent
+JSON error instead of returning raw model text.
+
+`max_tokens` is set in Worker code, not in the Cloudflare Worker settings page.
+To inspect token usage, open Cloudflare Worker Live Logs and look for the
+`ai_success` event. The Worker logs safe metadata such as `schemaVersion`,
+`maxTokens`, model name, duration, and `usage` when Workers AI returns it.
 
 JSON mode reference:
 

@@ -9,18 +9,28 @@ import type {
 
 type RawAiResponse = {
   response?: unknown;
+  usage?: unknown;
 };
 
 type RawPostingSuggestion = {
   case_id?: unknown;
   transaction_id?: unknown;
   matched_receipt_id?: unknown;
-  suggested_posting?: unknown;
+  account_code?: unknown;
+  account_name?: unknown;
+  vat_rate?: unknown;
+  amount_gross?: unknown;
+  currency?: unknown;
+  posting_text?: unknown;
   confidence?: unknown;
   decision?: unknown;
-  evidence?: unknown;
-  risks?: unknown;
+  evidence_1?: unknown;
+  evidence_2?: unknown;
+  risk_1?: unknown;
+  risk_2?: unknown;
 };
+
+const suggestionSchemaVersion = "flat_v1";
 
 const suggestionResponseSchema = {
   type: "object",
@@ -28,35 +38,35 @@ const suggestionResponseSchema = {
     "case_id",
     "transaction_id",
     "matched_receipt_id",
-    "suggested_posting",
+    "account_code",
+    "account_name",
+    "vat_rate",
+    "amount_gross",
+    "currency",
+    "posting_text",
     "confidence",
     "decision",
-    "evidence",
-    "risks"
+    "evidence_1",
+    "evidence_2",
+    "risk_1",
+    "risk_2"
   ],
   properties: {
     case_id: { type: "string" },
     transaction_id: { type: "string" },
-    matched_receipt_id: { type: ["string", "null"] },
-    suggested_posting: {
-      type: "object",
-      required: ["account_code", "account_name", "amount_gross", "currency", "posting_text"],
-      properties: {
-        account_code: { type: "string" },
-        account_name: { type: "string" },
-        vat_rate: { type: ["number", "null"] },
-        amount_gross: { type: "number" },
-        currency: { type: "string" },
-        posting_text: { type: "string" }
-      }
-    },
+    matched_receipt_id: { type: "string" },
+    account_code: { type: "string" },
+    account_name: { type: "string" },
+    vat_rate: { type: "number" },
+    amount_gross: { type: "number" },
+    currency: { type: "string" },
+    posting_text: { type: "string" },
     confidence: { type: "number" },
-    decision: {
-      type: "string",
-      enum: ["auto_post_candidate", "needs_human_approval", "manual_review"]
-    },
-    evidence: { type: "array", items: { type: "string" } },
-    risks: { type: "array", items: { type: "string" } }
+    decision: { type: "string" },
+    evidence_1: { type: "string" },
+    evidence_2: { type: "string" },
+    risk_1: { type: "string" },
+    risk_2: { type: "string" }
   }
 };
 
@@ -127,7 +137,9 @@ async function generatePostingSuggestion(
 
   options.log?.("ai_start", {
     caseId,
-    model: env.LLM_MODEL
+    model: env.LLM_MODEL,
+    schemaVersion: suggestionSchemaVersion,
+    maxTokens: 2000
   });
 
   const startedAt = Date.now();
@@ -151,14 +163,15 @@ async function generatePostingSuggestion(
         json_schema: suggestionResponseSchema
       },
       temperature: 0.1,
-      max_tokens: 1200
+      max_tokens: 2000
     }),
     options.timeoutMs ?? 45000
   )) as RawAiResponse | string;
 
   options.log?.("ai_success", {
     caseId,
-    durationMs: Date.now() - startedAt
+    durationMs: Date.now() - startedAt,
+    usage: typeof response === "object" && response !== null ? response.usage : undefined
   });
 
   const responseText = typeof response === "string" ? response : String(response.response ?? "");
@@ -210,19 +223,18 @@ function normalizeSuggestion(value: unknown, model: string): PostingSuggestion {
   }
 
   const raw = value as RawPostingSuggestion;
-  const suggestedPosting = normalizeSuggestedPosting(raw.suggested_posting);
+  const suggestedPosting = normalizeSuggestedPosting(raw);
   const decision = normalizeDecision(raw.decision);
 
   return {
     case_id: requireString(raw.case_id, "case_id"),
     transaction_id: requireString(raw.transaction_id, "transaction_id"),
-    matched_receipt_id:
-      typeof raw.matched_receipt_id === "string" ? raw.matched_receipt_id : null,
+    matched_receipt_id: normalizeOptionalId(raw.matched_receipt_id),
     suggested_posting: suggestedPosting,
     confidence: normalizeConfidence(raw.confidence),
     decision,
-    evidence: normalizeStringArray(raw.evidence),
-    risks: normalizeStringArray(raw.risks),
+    evidence: normalizeTextFields([raw.evidence_1, raw.evidence_2]),
+    risks: normalizeTextFields([raw.risk_1, raw.risk_2]),
     similar_examples: [],
     source: {
       retrieval_used: false,
@@ -232,20 +244,14 @@ function normalizeSuggestion(value: unknown, model: string): PostingSuggestion {
   };
 }
 
-function normalizeSuggestedPosting(value: unknown): SuggestedPosting {
-  if (!isObject(value)) {
-    throw new AiSuggestionError("Workers AI returned an invalid suggested_posting.");
-  }
-
-  const raw = value as Record<string, unknown>;
-
+function normalizeSuggestedPosting(raw: RawPostingSuggestion): SuggestedPosting {
   return {
-    account_code: requireString(raw.account_code, "suggested_posting.account_code"),
-    account_name: requireString(raw.account_name, "suggested_posting.account_name"),
+    account_code: requireString(raw.account_code, "account_code"),
+    account_name: requireString(raw.account_name, "account_name"),
     vat_rate: typeof raw.vat_rate === "number" ? raw.vat_rate : null,
-    amount_gross: requireNumber(raw.amount_gross, "suggested_posting.amount_gross"),
-    currency: requireString(raw.currency, "suggested_posting.currency"),
-    posting_text: requireString(raw.posting_text, "suggested_posting.posting_text")
+    amount_gross: requireNumber(raw.amount_gross, "amount_gross"),
+    currency: requireString(raw.currency, "currency"),
+    posting_text: requireString(raw.posting_text, "posting_text")
   };
 }
 
@@ -266,12 +272,20 @@ function normalizeConfidence(value: unknown): number {
   return Math.max(0, Math.min(1, confidence));
 }
 
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
+function normalizeOptionalId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
   }
 
-  return value.filter((item): item is string => typeof item === "string");
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeTextFields(values: unknown[]): string[] {
+  return values
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
 }
 
 function requireString(value: unknown, field: string): string {
